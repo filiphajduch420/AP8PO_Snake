@@ -46,4 +46,13 @@ Celý kód byl původně v jedné obrovské metodě `Main()`. Podle Clean Code (
 - `RemoveTailIfTooLong()` – ořízne ocas když je moc dlouhý
 - `DisplayGameOver()` – zobrazí skóre na konci
 
-Díky tomu je teď Main() úplně jednoduchý a celý program se dá snadno číst.
+## 3. Rozdělení kódu na třídy
+
+Předtím bylo úplně všechno v jedné třídě `Program`. Podle Clean Code (kapitola 10) by měla mít každá třída jen jednu zodpovědnost. Takže jsme kód rozdělili do samostatných souborů a tříd:
+
+- `GameField` – reprezentuje herní pole, zná jeho rozměry a umí zjistit jestli je nějaká pozice na okraji
+- `Snake` – reprezentuje hada, drží si hlavu, tělo, směr pohybu, umí se hýbat, ořezat ocas a zkontrolovat jestli nenarazil sám do sebe
+- `Food` – reprezentuje jídlo, umí se přemístit na novou náhodnou pozici a zjistit jestli je na dané souřadnici
+- `Game` (`Program.cs`) – hlavní herní třída, spojuje všechny ostatní dohromady, řídí herní smyčku, vykreslování a vstup
+- `Program` (`Program.cs`) – jen vstupní bod, vytvoří Game a spustí ho
+

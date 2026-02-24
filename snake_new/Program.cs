@@ -1,283 +1,169 @@
 ﻿// Posted by Wagacca, modified by community. See post 'Timeline' for change history
 // Retrieved 2026-02-17, License - CC BY-SA 3.0
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Threading;
-
 namespace Snake
 {
+    // entry point - just starts the game
     class Program
     {
-        // game field dimensions
-        static int windowWidth;
-        static int windowHeight;
-
-        // random generator for food placement
-        static Random random = new Random();
-
-        // player score (starts at 5 so snake has initial length)
-        static int score = 5;
-
-        // flag to end the game
-        static bool isGameOver = false;
-
-        // the snake head object
-        static SnakeHead snakeHead;
-
-        // current movement direction
-        static string currentDirection = "RIGHT";
-
-        // snake body segments stored as separate x and y lists
-        static List<int> bodyXPositions = new List<int>();
-        static List<int> bodyYPositions = new List<int>();
-
-        // food coordinates
-        static int foodX;
-        static int foodY;
-
         static void Main(string[] args)
         {
-            InitializeGame();
+            Game game = new Game();
+            game.Run();
+        }
+    }
+
+    // main game class - connects all parts together and runs the loop
+    class Game
+    {
+        private GameField _field;
+        private Snake _snake;
+        private Food _food;
+        private int _score = 5;
+        private bool _isGameOver = false;
+
+        // set up game objects
+        public Game()
+        {
+            Console.WindowHeight = 16;
+            Console.WindowWidth = 32;
+
+            _field = new GameField(Console.WindowWidth, Console.WindowHeight);
+            _snake = new Snake(_field.Width / 2, _field.Height / 2);
+            _food = new Food(_field.Width, _field.Height);
+        }
+
+        // main entry - init, loop, then show result
+        public void Run()
+        {
             RunGameLoop();
             DisplayGameOver();
         }
 
-        // sets up console window and initial game state
-        static void InitializeGame()
-        {
-            Console.WindowHeight = 16;
-            Console.WindowWidth = 32;
-            windowWidth = Console.WindowWidth;
-            windowHeight = Console.WindowHeight;
-
-            snakeHead = new SnakeHead();
-            snakeHead.X = windowWidth / 2;
-            snakeHead.Y = windowHeight / 2;
-            snakeHead.Color = ConsoleColor.Red;
-
-            foodX = random.Next(0, windowWidth);
-            foodY = random.Next(0, windowHeight);
-        }
-
-        // main game loop - runs until game over
-        static void RunGameLoop()
+        // game loop - runs every frame until game over
+        private void RunGameLoop()
         {
             while (true)
             {
                 Console.Clear();
 
-                CheckBorderCollision();
-                DrawBorders();
+                CheckCollisions();
 
-                Console.ForegroundColor = ConsoleColor.Green;
-
-                CheckFoodCollision();
-                DrawBodyAndCheckSelfCollision();
-
-                if (isGameOver)
+                if (_isGameOver)
                     break;
 
-                DrawSnakeHead();
-                DrawFood();
-
-                HandleInputForFrame();
-
-                UpdateSnakePosition();
-                RemoveTailIfTooLong();
+                DrawFrame();
+                HandleInput();
+                UpdateSnake();
             }
         }
 
-        // check if snake head hit any wall
-        static void CheckBorderCollision()
+        // check all collisions - borders, food and self
+        private void CheckCollisions()
         {
-            if (snakeHead.X == windowWidth - 1 || snakeHead.X == 0 ||
-                snakeHead.Y == windowHeight - 1 || snakeHead.Y == 0)
+            if (_field.IsOnBorder(_snake.HeadX, _snake.HeadY))
+                _isGameOver = true;
+
+            if (_food.IsAt(_snake.HeadX, _snake.HeadY))
             {
-                isGameOver = true;
+                _score++;
+                _food.Respawn(_field.Width, _field.Height);
             }
+
+            if (_snake.IsCollidingWithSelf())
+                _isGameOver = true;
         }
 
-        // draws all four borders around the playing field
-        static void DrawBorders()
+        // draw everything on screen
+        private void DrawFrame()
         {
-            DrawHorizontalBorder(0);
-            DrawHorizontalBorder(windowHeight - 1);
-            DrawVerticalBorder(0);
-            DrawVerticalBorder(windowWidth - 1);
+            DrawBorders();
+            DrawSnakeBody();
+            DrawSnakeHead();
+            DrawFood();
         }
 
-        // draws a horizontal line of blocks at given y position
-        static void DrawHorizontalBorder(int y)
+        // draw all four borders
+        private void DrawBorders()
         {
-            for (int i = 0; i < windowWidth; i++)
+            for (int i = 0; i < _field.Width; i++)
             {
-                Console.SetCursorPosition(i, y);
+                Console.SetCursorPosition(i, 0);
+                Console.Write("■");
+                Console.SetCursorPosition(i, _field.Height - 1);
+                Console.Write("■");
+            }
+
+            for (int i = 0; i < _field.Height; i++)
+            {
+                Console.SetCursorPosition(0, i);
+                Console.Write("■");
+                Console.SetCursorPosition(_field.Width - 1, i);
                 Console.Write("■");
             }
         }
 
-        // draws a vertical line of blocks at given x position
-        static void DrawVerticalBorder(int x)
+        // draw all body segments
+        private void DrawSnakeBody()
         {
-            for (int i = 0; i < windowHeight; i++)
+            Console.ForegroundColor = ConsoleColor.Green;
+            for (int i = 0; i < _snake.BodyLength; i++)
             {
-                Console.SetCursorPosition(x, i);
+                var segment = _snake.GetBodySegment(i);
+                Console.SetCursorPosition(segment.x, segment.y);
                 Console.Write("■");
             }
         }
 
-        // if snake is on the food, increase score and move food
-        static void CheckFoodCollision()
+        // draw the head
+        private void DrawSnakeHead()
         {
-            if (foodX == snakeHead.X && foodY == snakeHead.Y)
-            {
-                score++;
-                foodX = random.Next(1, windowWidth - 2);
-                foodY = random.Next(1, windowHeight - 2);
-            }
-        }
-
-        // renders all body segments and checks if head overlaps any of them
-        static void DrawBodyAndCheckSelfCollision()
-        {
-            for (int i = 0; i < bodyXPositions.Count(); i++)
-            {
-                Console.SetCursorPosition(bodyXPositions[i], bodyYPositions[i]);
-                Console.Write("■");
-
-                if (bodyXPositions[i] == snakeHead.X && bodyYPositions[i] == snakeHead.Y)
-                {
-                    isGameOver = true;
-                }
-            }
-        }
-
-        // draws the snake head with its color
-        static void DrawSnakeHead()
-        {
-            Console.SetCursorPosition(snakeHead.X, snakeHead.Y);
-            Console.ForegroundColor = snakeHead.Color;
+            Console.SetCursorPosition(_snake.HeadX, _snake.HeadY);
+            Console.ForegroundColor = _snake.HeadColor;
             Console.Write("■");
         }
 
-        // draws food on the screen
-        static void DrawFood()
+        // draw food
+        private void DrawFood()
         {
-            Console.SetCursorPosition(foodX, foodY);
+            Console.SetCursorPosition(_food.X, _food.Y);
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.Write("■");
         }
 
-        // waits for 500ms and reads player input during that time
-        static void HandleInputForFrame()
+        // wait 500ms and read keyboard input during that time
+        private void HandleInput()
         {
-            DateTime frameStartTime = DateTime.Now;
-            bool directionChangedThisTick = false;
+            DateTime frameStart = DateTime.Now;
+            bool changed = false;
 
             while (true)
             {
-                DateTime currentTime = DateTime.Now;
-                if (currentTime.Subtract(frameStartTime).TotalMilliseconds > 500)
+                if (DateTime.Now.Subtract(frameStart).TotalMilliseconds > 500)
                     break;
 
                 if (Console.KeyAvailable)
                 {
-                    ConsoleKeyInfo keyPressed = Console.ReadKey(true);
-                    directionChangedThisTick = TryChangeDirection(keyPressed, directionChangedThisTick);
+                    ConsoleKeyInfo key = Console.ReadKey(true);
+                    if (!changed)
+                        changed = _snake.TryChangeDirection(key.Key);
                 }
             }
         }
 
-        // tries to change direction based on pressed key, returns true if direction was changed
-        static bool TryChangeDirection(ConsoleKeyInfo keyPressed, bool alreadyChanged)
+        // move snake and trim tail
+        private void UpdateSnake()
         {
-            if (alreadyChanged)
-                return true;
-
-            if (keyPressed.Key.Equals(ConsoleKey.UpArrow) && currentDirection != "DOWN")
-            {
-                currentDirection = "UP";
-                return true;
-            }
-
-            if (keyPressed.Key.Equals(ConsoleKey.DownArrow) && currentDirection != "UP")
-            {
-                currentDirection = "DOWN";
-                return true;
-            }
-
-            if (keyPressed.Key.Equals(ConsoleKey.LeftArrow) && currentDirection != "RIGHT")
-            {
-                currentDirection = "LEFT";
-                return true;
-            }
-
-            if (keyPressed.Key.Equals(ConsoleKey.RightArrow) && currentDirection != "LEFT")
-            {
-                currentDirection = "RIGHT";
-                return true;
-            }
-
-            return false;
+            _snake.Move();
+            _snake.TrimTail(_score);
         }
 
-        // adds current head position to body and moves the head
-        static void UpdateSnakePosition()
+        // show final score
+        private void DisplayGameOver()
         {
-            bodyXPositions.Add(snakeHead.X);
-            bodyYPositions.Add(snakeHead.Y);
-
-            MoveHead();
-        }
-
-        // moves the head one step in current direction
-        static void MoveHead()
-        {
-            switch (currentDirection)
-            {
-                case "UP":
-                    snakeHead.Y--;
-                    break;
-                case "DOWN":
-                    snakeHead.Y++;
-                    break;
-                case "LEFT":
-                    snakeHead.X--;
-                    break;
-                case "RIGHT":
-                    snakeHead.X++;
-                    break;
-            }
-        }
-
-        // removes the oldest body segment if body is longer than score
-        static void RemoveTailIfTooLong()
-        {
-            if (bodyXPositions.Count() > score)
-            {
-                bodyXPositions.RemoveAt(0);
-                bodyYPositions.RemoveAt(0);
-            }
-        }
-
-        // shows the final score when game ends
-        static void DisplayGameOver()
-        {
-            Console.SetCursorPosition(windowWidth / 5, windowHeight / 2);
-            Console.WriteLine("Game over, Score: " + score);
-            Console.SetCursorPosition(windowWidth / 5, windowHeight / 2 + 1);
-        }
-
-        // represents the snake head with position and color
-        class SnakeHead
-        {
-            public int X { get; set; }
-            public int Y { get; set; }
-            public ConsoleColor Color { get; set; }
+            Console.SetCursorPosition(_field.Width / 5, _field.Height / 2);
+            Console.WriteLine("Game over, Score: " + _score);
+            Console.SetCursorPosition(_field.Width / 5, _field.Height / 2 + 1);
         }
     }
 }
